@@ -1,0 +1,10 @@
+
+
+
+ 
+train: ../fire/train  # train images
+val: ../fire/val  # val images
+
+# Classes
+nc: 1  # number of classes
+names: ['fire']  # class names

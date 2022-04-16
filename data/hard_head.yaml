@@ -1,0 +1,7 @@
+names:
+- helmet
+- head
+- person
+nc: '3'
+train: ../new-model/Dataset/images/train
+val: ../new-model/Dataset/images/val

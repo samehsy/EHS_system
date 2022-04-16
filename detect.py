@@ -24,6 +24,16 @@ Usage - formats:
                                          yolov5s_edgetpu.tflite     # TensorFlow Edge TPU
 """
 
+from flask import Flask, render_template, Response
+import subprocess
+import numpy as np
+
+from utils.torch_utils import select_device, time_sync
+from utils.plots import Annotator, colors, save_one_box
+from utils.general import (LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr, cv2,
+                           increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh)
+from utils.datasets import IMG_FORMATS, VID_FORMATS, LoadImages, LoadStreams
+from models.common import DetectMultiBackend
 import argparse
 import os
 import sys
@@ -38,20 +48,31 @@ if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))  # add ROOT to PATH
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
-from models.common import DetectMultiBackend
-from utils.datasets import IMG_FORMATS, VID_FORMATS, LoadImages, LoadStreams
-from utils.general import (LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr, cv2,
-                           increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh)
-from utils.plots import Annotator, colors, save_one_box
-from utils.torch_utils import select_device, time_sync
+
+def run_ffmpeg(width, height, fps):
+    ffmpg_cmd = [
+        'ffmpeg',
+        '-y',
+        '-f', 'rawvideo',
+        '-vcodec', 'rawvideo',
+        '-pix_fmt', 'bgr24',
+        '-s', "{}x{}".format(width, height),
+        '-r', str(fps),
+        '-i', '-', 
+     
+        '-hls_time', '5',
+        '-hls_list_size', '6',
+        './veds/index.m3u8'
+    ]
+    return subprocess.Popen(ffmpg_cmd, stdin=subprocess.PIPE)
 
 
 @torch.no_grad()
 def run(
-        weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
+        weights=ROOT / 'yolov5n.pt',  # model.pt path(s)
         source=ROOT / 'data/images',  # file/dir/URL/glob, 0 for webcam
         data=ROOT / 'data/coco128.yaml',  # dataset.yaml path
-        imgsz=(640, 640),  # inference size (height, width)
+        imgsz=(640, 640 ),  # inference size (height, width)
         conf_thres=0.25,  # confidence threshold
         iou_thres=0.45,  # NMS IOU threshold
         max_det=1000,  # maximum detections per image
@@ -99,9 +120,13 @@ def run(
         cudnn.benchmark = True  # set True to speed up constant image size inference
         dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=pt)
         bs = len(dataset)  # batch_size
+
+        # ffmpeg_process = run_ffmpeg( 640,480, 30)
+
     else:
         dataset = LoadImages(source, img_size=imgsz, stride=stride, auto=pt)
         bs = 1  # batch_size
+
     vid_path, vid_writer = [None] * bs, [None] * bs
 
     # Run inference
@@ -172,9 +197,12 @@ def run(
 
             # Stream results
             im0 = annotator.result()
+            # ffmpeg_process.stdin.write(im0 )
+
             if view_img:
                 cv2.imshow(str(p), im0)
                 cv2.waitKey(1)  # 1 millisecond
+               
 
             # Save results (image with detections)
             if save_img:
@@ -187,16 +215,22 @@ def run(
                             vid_writer[i].release()  # release previous video writer
                         if vid_cap:  # video
                             fps = vid_cap.get(cv2.CAP_PROP_FPS)
+                            
                             w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                             h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                         else:  # stream
                             fps, w, h = 30, im0.shape[1], im0.shape[0]
+                          
                         save_path = str(Path(save_path).with_suffix('.mp4'))  # force *.mp4 suffix on results videos
                         vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer[i].write(im0)
+                    LOGGER.info(f' {im0.shape} - {fps}) ')
+                   
+
+
 
         # Print time (inference-only)
-        LOGGER.info(f'{s}Done. ({t3 - t2:.3f}s)')
+        LOGGER.info(f'{s}Done. ({ t3 - t2:.3f}s) ')
 
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
@@ -206,6 +240,9 @@ def run(
         LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
     if update:
         strip_optimizer(weights)  # update model (to fix SourceChangeWarning)
+
+
+# sameh  changes  add  ffmpeg  stream
 
 
 def parse_opt():
