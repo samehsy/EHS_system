@@ -48,6 +48,7 @@ if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))  # add ROOT to PATH
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
+BACKEND_NODE_DIR = '/home/sameh/Desktop/graduation_project/EHS_system/back/hls/'
 
 def run_ffmpeg(width, height, fps):
     ffmpg_cmd = [
@@ -57,12 +58,11 @@ def run_ffmpeg(width, height, fps):
         '-vcodec', 'rawvideo',
         '-pix_fmt', 'bgr24',
         '-s', "{}x{}".format(width, height),
-        '-r', str(fps),
+        '-r', str(20),
         '-i', '-', 
-     
         '-hls_time', '5',
         '-hls_list_size', '6',
-        './veds/index.m3u8'
+        '/home/sameh/Desktop/graduation_project/EHS_system/back/hls/index.m3u8'
     ]
     return subprocess.Popen(ffmpg_cmd, stdin=subprocess.PIPE)
 
@@ -72,7 +72,7 @@ def run(
         weights=ROOT / 'yolov5n.pt',  # model.pt path(s)
         source=ROOT / 'data/images',  # file/dir/URL/glob, 0 for webcam
         data=ROOT / 'data/coco128.yaml',  # dataset.yaml path
-        imgsz=(640, 640 ),  # inference size (height, width)
+        imgsz=(480, 480 ),  # inference size (height, width)
         conf_thres=0.25,  # confidence threshold
         iou_thres=0.45,  # NMS IOU threshold
         max_det=1000,  # maximum detections per image
@@ -119,9 +119,9 @@ def run(
         view_img = check_imshow()
         cudnn.benchmark = True  # set True to speed up constant image size inference
         dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=pt)
-        bs = len(dataset)  # batch_size
+        bs = len(dataset)   # batch_size
 
-        # ffmpeg_process = run_ffmpeg( 640,480, 30)
+        # ffmpeg_process = run_ffmpeg( 480,480, 30)
 
     else:
         dataset = LoadImages(source, img_size=imgsz, stride=stride, auto=pt)
@@ -198,10 +198,11 @@ def run(
             # Stream results
             im0 = annotator.result()
             # ffmpeg_process.stdin.write(im0 )
+          
 
-            if view_img:
-                cv2.imshow(str(p), im0)
-                cv2.waitKey(1)  # 1 millisecond
+            # if view_img:
+            #     cv2.imshow(str(p), im0)
+            #     cv2.waitKey(1)  # 1 millisecond
                
 
             # Save results (image with detections)
@@ -215,7 +216,7 @@ def run(
                             vid_writer[i].release()  # release previous video writer
                         if vid_cap:  # video
                             fps = vid_cap.get(cv2.CAP_PROP_FPS)
-                            
+                            # fps =60
                             w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                             h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                         else:  # stream
@@ -223,8 +224,8 @@ def run(
                           
                         save_path = str(Path(save_path).with_suffix('.mp4'))  # force *.mp4 suffix on results videos
                         vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+                        LOGGER.info(f' {im0.shape} - {fps}) ')
                     vid_writer[i].write(im0)
-                    LOGGER.info(f' {im0.shape} - {fps}) ')
                    
 
 

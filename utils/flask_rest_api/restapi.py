@@ -26,7 +26,9 @@ def predict():
 
         img = Image.open(io.BytesIO(image_bytes))
 
-        results = model(img, size=640)  # reduce size=320 for faster inference
+        results = model(img, size=640)  # reduce size=320 for faster inference'
+
+        results.show()
         return results.pandas().xyxy[0].to_json(orient="records")
 
 
@@ -38,8 +40,8 @@ if __name__ == "__main__":
     # Fix known issue urllib.error.HTTPError 403: rate limit exceeded https://github.com/ultralytics/yolov5/pull/7210
     torch.hub._validate_not_a_forked_repo = lambda a, b, c: True
 
-    model = torch.hub.load("ultralytics/yolov5", "yolov5s", force_reload=True)  # force_reload to recache
-    # model = torch.hub.load('ultralytics/yolov5', 'custom',
-    #                        path='/home/sameh/Desktop/graduation_project/EHS_system/yolov5/runs/train/exp2/weights/best.pt')  # custom model
+    # model = torch.hub.load("ultralytics/yolov5", "yolov5s", force_reload=True)  # force_reload to recache
+    model = torch.hub.load('ultralytics/yolov5', 'custom',
+                           path='/home/sameh/Desktop/graduation_project/EHS_system/yolov5/runs/train/exp2/weights/best.pt')  # custom model
 
     app.run(host="0.0.0.0", port=opt.port)  # debug=True causes Restarting with stat
