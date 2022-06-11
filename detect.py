@@ -24,7 +24,7 @@ Usage - formats:
                                          yolov5s_edgetpu.tflite     # TensorFlow Edge TPU
 """
 
-from flask import Flask, render_template, Response
+from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadStreams
 import subprocess
 import numpy as np
 
@@ -32,7 +32,6 @@ from utils.torch_utils import select_device, time_sync
 from utils.plots import Annotator, colors, save_one_box
 from utils.general import (LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr, cv2,
                            increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh)
-from utils.datasets import IMG_FORMATS, VID_FORMATS, LoadImages, LoadStreams
 from models.common import DetectMultiBackend
 import argparse
 import os
@@ -51,13 +50,6 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 BACKEND_NODE_DIR = '/home/sameh/Desktop/graduation_project/EHS_system/back/hls/'
 
 
-from models.common import DetectMultiBackend
-from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadStreams
-from utils.general import (LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr, cv2,
-                           increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh)
-from utils.plots import Annotator, colors, save_one_box
-from utils.torch_utils import select_device, time_sync
-
 def run_ffmpeg(width, height, fps):
     ffmpg_cmd = [
         'ffmpeg',
@@ -66,20 +58,21 @@ def run_ffmpeg(width, height, fps):
         '-vcodec', 'rawvideo',
         '-pix_fmt', 'bgr24',
         '-s', "{}x{}".format(width, height),
-        '-r', str(20),
-        '-i', '-', 
+        '-r', str(fps),
+        '-i', '-',
         '-hls_time', '5',
         '-hls_list_size', '6',
         '/home/sameh/Desktop/graduation_project/EHS_system/back/hls/index.m3u8'
     ]
     return subprocess.Popen(ffmpg_cmd, stdin=subprocess.PIPE)
-    
+
+
 @torch.no_grad()
 def run(
         weights=ROOT / 'yolov5n.pt',  # model.pt path(s)
         source=ROOT / 'data/images',  # file/dir/URL/glob, 0 for webcam
         data=ROOT / 'data/coco128.yaml',  # dataset.yaml path
-        imgsz=(480, 480 ),  # inference size (height, width)
+        imgsz=(480, 480),  # inference size (height, width)
         conf_thres=0.25,  # confidence threshold
         iou_thres=0.45,  # NMS IOU threshold
         max_det=1000,  # maximum detections per image
@@ -127,8 +120,9 @@ def run(
         cudnn.benchmark = True  # set True to speed up constant image size inference
         dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=pt)
         bs = len(dataset)   # batch_size
+        # bs = 128  # batch_size
 
-        # ffmpeg_process = run_ffmpeg( 480,480, 30)
+        # ffmpeg_process = run_ffmpeg(640, 480, 30)
 
     else:
         dataset = LoadImages(source, img_size=imgsz, stride=stride, auto=pt)
@@ -138,8 +132,13 @@ def run(
 
     # Run inference
     model.warmup(imgsz=(1 if pt else bs, 3, *imgsz))  # warmup
+
+    lastPred = ''
+    freameNo = -1
     dt, seen = [0.0, 0.0, 0.0], 0
     for path, im, im0s, vid_cap, s in dataset:
+        # freameNo += 1
+
         t1 = time_sync()
         im = torch.from_numpy(im).to(device)
         im = im.half() if model.fp16 else im.float()  # uint8 to fp16/32
@@ -149,16 +148,25 @@ def run(
         t2 = time_sync()
         dt[0] += t2 - t1
 
-        # Inference
+        # if(freameNo % 10 > 0):
+        #     pred = lastPred
+        #     ffmpeg_process.stdin.write(im0)
+
+        #     cv2.imshow('0', im0s[0])
+        #     cv2.waitKey(1)  # 1 millisecond
+        #     continue
+            
+        # else:
+        #     # Inference
+        #     freameNo = 0
+
         visualize = increment_path(save_dir / Path(path).stem, mkdir=True) if visualize else False
         pred = model(im, augment=augment, visualize=visualize)
         t3 = time_sync()
         dt[1] += t3 - t2
-
         # NMS
         pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
         dt[2] += time_sync() - t3
-
         # Second-stage classifier (optional)
         # pred = utils.general.apply_classifier(pred, classifier_model, im, im0s)
 
@@ -204,13 +212,11 @@ def run(
 
             # Stream results
             im0 = annotator.result()
-            # ffmpeg_process.stdin.write(im0 )
-          
+            # ffmpeg_process.stdin.write(im0)
 
-            # if view_img:
-            #     cv2.imshow(str(p), im0)
-            #     cv2.waitKey(1)  # 1 millisecond
-               
+            if view_img:
+                cv2.imshow(str(p), im0)
+                cv2.waitKey(1)  # 1 millisecond
 
             # Save results (image with detections)
             if save_img:
@@ -223,19 +229,17 @@ def run(
                             vid_writer[i].release()  # release previous video writer
                         if vid_cap:  # video
                             fps = vid_cap.get(cv2.CAP_PROP_FPS)
+
                             # fps =60
                             w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                             h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                         else:  # stream
                             fps, w, h = 30, im0.shape[1], im0.shape[0]
-                          
+
                         save_path = str(Path(save_path).with_suffix('.mp4'))  # force *.mp4 suffix on results videos
                         vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                         LOGGER.info(f' {im0.shape} - {fps}) ')
                     vid_writer[i].write(im0)
-                   
-
-
 
         # Print time (inference-only)
         LOGGER.info(f'{s}Done. ({ t3 - t2:.3f}s) ')
